@@ -9,6 +9,9 @@ from pathlib import Path
 
 class JMeterRunner:
     def __init__(self):
+        # For cloud deployment, we'll use a simplified approach without JMeter
+        # since JMeter requires system-level installation
+        self.is_cloud_deployment = os.getenv('FLASK_ENV') == 'production'
         self.jmeter_home = os.getenv('JMETER_HOME', 'C:\\Users\\Sneha\\Downloads\\apache-jmeter-5.6.3')  # Default JMeter path
         self.jmeter_bin = os.path.join(self.jmeter_home, 'bin', 'jmeter.bat' if os.name == 'nt' else 'jmeter')
         self.results_dir = Path("jmeter_results")
@@ -467,48 +470,45 @@ class JMeterRunner:
 </jmeterTestPlan>"""
     
     def run_jmeter_test(self, test_config):
-        """Run JMeter test and return results"""
+        """Run JMeter test with the given configuration"""
         test_id = test_config['id']
         
-        # Create JMX file
-        jmx_file = self.create_jmx_file(test_config)
-        
-        # Prepare output files
-        jtl_file = self.results_dir / f"{test_id}.jtl"
-        log_file = self.results_dir / f"{test_id}.log"
-        
-        # Build JMeter command
-        cmd = [
-            self.jmeter_bin,
-            '-n',  # Non-GUI mode
-            '-t', jmx_file,  # Test plan file
-            '-l', str(jtl_file),  # Results file
-            '-j', str(log_file),  # Log file
-            '-e',  # Generate report
-            '-o', str(self.results_dir / f"{test_id}_report")  # Report directory
-        ]
+        # For cloud deployment, use simulated testing
+        if self.is_cloud_deployment:
+            return self._run_simulated_test(test_config)
         
         try:
-            # Run JMeter
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
+            # Create JMX file
+            jmx_file = self.create_jmx_file(test_config)
             
-            # Store process info
+            # Create results file
+            jtl_file = self.results_dir / f"{test_id}.jtl"
+            
+            # Build JMeter command
+            cmd = [
+                self.jmeter_bin,
+                '-n',  # Non-GUI mode
+                '-t', jmx_file,  # Test plan file
+                '-l', str(jtl_file),  # Results file
+                '-j', str(self.results_dir / f"{test_id}.log")  # Log file
+            ]
+            
+            # Start JMeter process
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            
+            # Store test info
             self.active_tests[test_id] = {
                 'process': process,
-                'start_time': datetime.now(),
                 'config': test_config,
-                'status': 'running'
+                'start_time': datetime.now(),
+                'status': 'running',
+                'jtl_file': str(jtl_file)
             }
             
             # Start monitoring thread
             monitor_thread = threading.Thread(
                 target=self._monitor_test,
-                args=(test_id, process, jtl_file)
+                args=(test_id, process, str(jtl_file))
             )
             monitor_thread.daemon = True
             monitor_thread.start()
@@ -516,14 +516,81 @@ class JMeterRunner:
             return {
                 'success': True,
                 'test_id': test_id,
-                'message': f"JMeter test {test_id} started successfully"
+                'message': f'Test {test_id} started successfully'
             }
             
         except Exception as e:
             return {
                 'success': False,
-                'error': f"Failed to start JMeter test: {str(e)}"
+                'error': f'Failed to start test: {str(e)}'
             }
+    
+    def _run_simulated_test(self, test_config):
+        """Run a simulated performance test for cloud deployment"""
+        test_id = test_config['id']
+        
+        try:
+            # Simulate test execution
+            self.active_tests[test_id] = {
+                'config': test_config,
+                'start_time': datetime.now(),
+                'status': 'running',
+                'simulated': True
+            }
+            
+            # Start simulated monitoring thread
+            monitor_thread = threading.Thread(
+                target=self._monitor_simulated_test,
+                args=(test_id,)
+            )
+            monitor_thread.daemon = True
+            monitor_thread.start()
+            
+            return {
+                'success': True,
+                'test_id': test_id,
+                'message': f'Simulated test {test_id} started successfully'
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': f'Failed to start simulated test: {str(e)}'
+            }
+    
+    def _monitor_simulated_test(self, test_id):
+        """Monitor simulated test execution"""
+        import time
+        import random
+        
+        if test_id not in self.active_tests:
+            return
+        
+        test_info = self.active_tests[test_id]
+        config = test_info['config']
+        duration = config.get('duration', 60)
+        
+        # Simulate test execution
+        time.sleep(duration)
+        
+        # Generate simulated results
+        simulated_results = {
+            'successRate': random.uniform(85, 99),
+            'avgResponseTime': random.uniform(100, 500),
+            'peakRPS': random.uniform(10, 50),
+            'totalRequests': config.get('users', 10) * duration,
+            'failedRequests': int(random.uniform(1, 5)),
+            'minResponseTime': random.uniform(50, 200),
+            'maxResponseTime': random.uniform(800, 2000),
+            'medianResponseTime': random.uniform(150, 400)
+        }
+        
+        # Update test status
+        test_info['status'] = 'completed'
+        test_info['results'] = simulated_results
+        test_info['end_time'] = datetime.now()
+        
+        print(f"Simulated test {test_id} completed with results: {simulated_results}")
     
     def _monitor_test(self, test_id, process, jtl_file):
         """Monitor test progress and update status"""

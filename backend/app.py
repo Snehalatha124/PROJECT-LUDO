@@ -39,6 +39,7 @@ openai.api_base = OPENROUTER_BASE_URL
 IS_PRODUCTION = os.getenv('FLASK_ENV') == 'production'
 BACKEND_URL = os.getenv('BACKEND_URL', 'http://localhost:5000')
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+PORT = int(os.getenv('PORT', 5000))
 
 # Initialize JMeter Runner
 jmeter_runner = JMeterRunner()
@@ -789,4 +790,4 @@ if __name__ == '__main__':
     print("=" * 60)
     
     # Start Flask server (HTTP endpoints will work, Socket.IO will also work)
-    app.run(host='0.0.0.0', port=5000, debug=not IS_PRODUCTION) 
+    app.run(host='0.0.0.0', port=PORT, debug=not IS_PRODUCTION) 
