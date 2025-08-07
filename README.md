@@ -403,4 +403,5 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 **Built with ❤️ for performance testing and AI-powered insights**
 
-**🆕 Now featuring OpenRouter AI integration with image analysis capabilities!** 
+**🆕 Now featuring OpenRouter AI integration with image analysis capabilities!** #   P R O J E C T - L U D O  
+ 
