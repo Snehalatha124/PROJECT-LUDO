@@ -12,14 +12,6 @@ services:
         value: production
       - key: GEMINI_API_KEY
         sync: false
-      - key: OPENROUTER_API_KEY
-        sync: false
-      - key: OPENROUTER_BASE_URL
-        value: https://openrouter.ai/api/v1
-      - key: OPENROUTER_SITE_URL
-        value: https://ludo-performance-suite.onrender.com
-      - key: OPENROUTER_SITE_NAME
-        value: Ludo Performance Suite
       - key: BACKEND_URL
         value: https://ludo-backend.onrender.com
       - key: FRONTEND_URL

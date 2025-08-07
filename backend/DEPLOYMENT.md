@@ -16,16 +16,12 @@ Set these in your Render dashboard:
 
 #### Required API Keys:
 ```
-GEMINI_API_KEY=your_gemini_api_key_here
-OPENROUTER_API_KEY=your_openrouter_api_key_here
+GEMINI_API_KEY=your_actual_gemini_api_key_here
 ```
 
 #### Optional Configuration:
 ```
 FLASK_ENV=production
-OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-OPENROUTER_SITE_URL=https://your-frontend-url.onrender.com
-OPENROUTER_SITE_NAME=Ludo Performance Suite
 BACKEND_URL=https://your-backend-service.onrender.com
 FRONTEND_URL=https://your-frontend-service.onrender.com
 ```
@@ -41,7 +37,7 @@ FRONTEND_URL=https://your-frontend-service.onrender.com
 ### Features:
 - ✅ Flask API with CORS support
 - ✅ Socket.IO for real-time communication
-- ✅ AI-powered performance analysis
+- ✅ AI-powered performance analysis (Gemini Pro)
 - ✅ Simulated JMeter testing (cloud-compatible)
 - ✅ Health check endpoint
 - ✅ Production-ready with Gunicorn
@@ -57,8 +53,13 @@ FRONTEND_URL=https://your-frontend-service.onrender.com
 - `GET /tests/history` - Get test history
 - `GET /agent/status` - AI agent status
 
+### AI Integration:
+- **Model:** Google Gemini Pro
+- **Capabilities:** Performance analysis, problem identification, recommendations
+- **Features:** JSON-structured responses, confidence scoring, severity assessment
+
 ### Notes:
 - JMeter functionality is simulated in cloud deployment
 - Real JMeter requires system-level installation (not available on Render)
-- All AI analysis features work normally
+- All AI analysis features work with Gemini Pro
 - Socket.IO supports real-time updates

@@ -2,7 +2,6 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 import google.generativeai as genai
-import openai
 import os
 import json
 import subprocess
@@ -25,16 +24,6 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'your-gemini-api-key-here')
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel('gemini-pro')
 
-# Configure OpenRouter API
-OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', 'your-openrouter-api-key-here')
-OPENROUTER_BASE_URL = os.getenv('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1')
-OPENROUTER_SITE_URL = os.getenv('OPENROUTER_SITE_URL', 'https://your-site-url.com')
-OPENROUTER_SITE_NAME = os.getenv('OPENROUTER_SITE_NAME', 'Ludo Performance Suite')
-
-# Initialize OpenRouter client
-openai.api_key = OPENROUTER_API_KEY
-openai.api_base = OPENROUTER_BASE_URL
-
 # Environment configuration
 IS_PRODUCTION = os.getenv('FLASK_ENV') == 'production'
 BACKEND_URL = os.getenv('BACKEND_URL', 'http://localhost:5000')
@@ -56,9 +45,7 @@ class PerformanceAnalyzer:
 
     def _determine_ai_provider(self):
         """Determine which AI provider to use based on available API keys"""
-        if OPENROUTER_API_KEY != 'your-openrouter-api-key-here':
-            return 'openrouter'
-        elif GEMINI_API_KEY != 'your-gemini-api-key-here':
+        if GEMINI_API_KEY != 'your-gemini-api-key-here':
             return 'gemini'
         else:
             return 'fallback'
@@ -69,9 +56,7 @@ class PerformanceAnalyzer:
         Supports both text and image analysis
         """
         try:
-            if self.ai_provider == 'openrouter':
-                return self._openrouter_analysis(jmeter_output, image_url)
-            elif self.ai_provider == 'gemini':
+            if self.ai_provider == 'gemini':
                 return self._gemini_analysis(jmeter_output, image_url)
             else:
                 return self._generate_fallback_analysis(jmeter_output)
@@ -79,106 +64,6 @@ class PerformanceAnalyzer:
         except Exception as e:
             print(f"AI analysis failed: {e}")
             return self._generate_fallback_analysis(jmeter_output)
-
-    def _openrouter_analysis(self, jmeter_output, image_url=None):
-        """Use OpenRouter API with Gemini 2.0 Flash for analysis"""
-        try:
-            # Enhanced prompt for AI agent behavior
-            prompt = f"""
-            You are an intelligent Performance Testing AI Agent. Analyze the following JMeter test results and act as a performance engineer would.
-            
-            JMETER TEST RESULTS:
-            {json.dumps(jmeter_output, indent=2)}
-            
-            As an AI Agent, you need to:
-            1. Identify the MAIN PROBLEM (if any)
-            2. Determine the ROOT CAUSE
-            3. Provide SPECIFIC RECOMMENDATIONS
-            4. Decide if a RETRY TEST is needed
-            
-            Consider these factors:
-            - Response times and their distribution
-            - Success/failure rates
-            - Throughput and RPS patterns
-            - Error patterns and types
-            - Resource utilization indicators
-            - Performance degradation patterns
-            
-            Respond ONLY with valid JSON in this exact format:
-            {{
-                "problem": "Clear description of the main issue or 'No significant problems detected'",
-                "root_cause": "Technical root cause analysis",
-                "recommendations": ["Specific recommendation 1", "Specific recommendation 2"],
-                "retry_test": true/false,
-                "confidence": 0.85,
-                "severity": "high/medium/low"
-            }}
-            """
-            
-            # Add image analysis if provided
-            if image_url:
-                # Multi-modal analysis with image
-                messages = [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt},
-                            {"type": "image_url", "image_url": {"url": image_url}}
-                        ]
-                    }
-                ]
-            else:
-                # Text-only analysis
-                messages = [
-                    {"role": "user", "content": prompt}
-                ]
-            
-            completion = openai.ChatCompletion.create(
-                model="google/gemini-2.0-flash-exp",
-                messages=messages,
-                max_tokens=1000,
-                temperature=0.3
-            )
-            
-            response_text = completion.choices[0].message.content
-            
-            # Parse JSON response
-            try:
-                agent_result = json.loads(response_text)
-                return {
-                    "success": True,
-                    "agent_response": agent_result,
-                    "raw_response": response_text,
-                    "ai_provider": "openrouter",
-                    "model": "gemini-2.0-flash-exp",
-                    "timestamp": datetime.now().isoformat()
-                }
-            except json.JSONDecodeError:
-                # Fallback if JSON parsing fails
-                return {
-                    "success": True,
-                    "agent_response": {
-                        "problem": "AI analysis completed but response format was unexpected",
-                        "root_cause": "Response parsing issue",
-                        "recommendations": ["Review AI response format", "Check API configuration"],
-                        "retry_test": False,
-                        "confidence": 0.5,
-                        "severity": "medium"
-                    },
-                    "raw_response": response_text,
-                    "ai_provider": "openrouter",
-                    "model": "gemini-2.0-flash-exp",
-                    "timestamp": datetime.now().isoformat()
-                }
-                
-        except Exception as e:
-            print(f"OpenRouter analysis failed: {e}")
-            return {
-                "success": False,
-                "error": f"OpenRouter analysis failed: {str(e)}",
-                "ai_provider": "openrouter",
-                "timestamp": datetime.now().isoformat()
-            }
 
     def _gemini_analysis(self, jmeter_output, image_url=None):
         """Use Google Gemini Pro for analysis"""
@@ -485,7 +370,7 @@ def home():
         "message": "Ludeosaurous AI Backend",
         "version": "1.0.0",
         "gemini_connected": GEMINI_API_KEY != 'your-gemini-api-key-here',
-        "openrouter_connected": OPENROUTER_API_KEY != 'your-openrouter-api-key-here',
+        "openrouter_connected": False, # Removed OpenRouter connection status
         "ai_provider": analyzer.ai_provider,
         "jmeter_available": True,
         "environment": "production" if IS_PRODUCTION else "development",
@@ -521,7 +406,7 @@ def health():
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "gemini_available": GEMINI_API_KEY != 'your-gemini-api-key-here',
-        "openrouter_available": OPENROUTER_API_KEY != 'your-openrouter-api-key-here',
+        "openrouter_available": False, # Removed OpenRouter connection status
         "ai_provider": analyzer.ai_provider,
         "jmeter_available": jmeter_available,
         "jmeter_path": jmeter_path,
@@ -773,7 +658,7 @@ def get_agent_status():
             "JMeter integration"
         ],
         "gemini_connected": GEMINI_API_KEY != 'your-gemini-api-key-here',
-        "openrouter_connected": OPENROUTER_API_KEY != 'your-openrouter-api-key-here',
+        "openrouter_connected": False, # Removed OpenRouter connection status
         "ai_provider": analyzer.ai_provider,
         "memory_entries": len(analyzer.agent_memory),
         "jmeter_available": True,
