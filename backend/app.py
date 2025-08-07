@@ -16,8 +16,22 @@ import time
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+
+# CORS Configuration - Flexible through environment variables
+CORS_ORIGINS = os.getenv('CORS_ORIGINS', '*').split(',')
+CORS_METHODS = os.getenv('CORS_METHODS', 'GET,POST,PUT,DELETE,OPTIONS').split(',')
+CORS_HEADERS = os.getenv('CORS_HEADERS', 'Content-Type,Authorization').split(',')
+
+# Apply CORS with flexible configuration
+CORS(app, 
+     origins=CORS_ORIGINS,
+     methods=CORS_METHODS,
+     allow_headers=CORS_HEADERS)
+
+# Socket.IO with flexible CORS
+socketio = SocketIO(app, 
+                   cors_allowed_origins=CORS_ORIGINS,
+                   async_mode='threading')
 
 # Configure Gemini API
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'your-gemini-api-key-here')

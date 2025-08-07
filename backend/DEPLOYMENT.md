@@ -3,11 +3,11 @@
 ## Render Deployment Configuration
 
 ### Service Settings:
-- **Name:** `ludo-backend`
+- **Name:** `PROJECT-LUDO`
 - **Environment:** `Python`
-- **Region:** `Oregon (US West)` (or your preferred region)
-- **Instance Type:** `Free` (for testing) or `Starter` ($7/month) for production
-- **Root Directory:** `backend` (leave empty if deploying from backend directory)
+- **Region:** `Singapore (Southeast Asia)`
+- **Instance Type:** `Free` (0.1 CPU, 512 MB)
+- **Root Directory:** `backend` ⚠️ **IMPORTANT: Set this to `backend`**
 - **Build Command:** `pip install -r requirements.txt`
 - **Start Command:** `gunicorn app:app --bind 0.0.0.0:$PORT`
 
@@ -19,20 +19,37 @@ Set these in your Render dashboard:
 GEMINI_API_KEY=your_actual_gemini_api_key_here
 ```
 
+#### CORS Configuration (Optional - defaults to allow all):
+```
+CORS_ORIGINS=https://your-frontend-url.vercel.app,https://localhost:3000
+CORS_METHODS=GET,POST,PUT,DELETE,OPTIONS
+CORS_HEADERS=Content-Type,Authorization
+```
+
 #### Optional Configuration:
 ```
 FLASK_ENV=production
-BACKEND_URL=https://your-backend-service.onrender.com
-FRONTEND_URL=https://your-frontend-service.onrender.com
+BACKEND_URL=https://project-ludo.onrender.com
+FRONTEND_URL=https://your-frontend-url.vercel.app
 ```
 
 ### Deployment Steps:
 
 1. **Create New Web Service** in Render
 2. **Connect GitHub Repository:** `https://github.com/Snehalatha124/PROJECT-LUDO.git`
-3. **Set Root Directory:** `backend`
+3. **Set Root Directory:** `backend` ⚠️ **CRITICAL**
 4. **Configure Environment Variables** (see above)
 5. **Deploy**
+
+### Current Render Settings:
+- ✅ **Name:** PROJECT-LUDO
+- ✅ **Region:** Singapore (Southeast Asia)
+- ✅ **Instance Type:** Free
+- ✅ **Repository:** https://github.com/Snehalatha124/PROJECT-LUDO.git
+- ✅ **Branch:** main
+- ✅ **Build Command:** pip install -r requirements.txt
+- ✅ **Start Command:** gunicorn app:app --bind 0.0.0.0:$PORT
+- ⚠️ **Root Directory:** NEEDS TO BE SET TO `backend`
 
 ### Features:
 - ✅ Flask API with CORS support

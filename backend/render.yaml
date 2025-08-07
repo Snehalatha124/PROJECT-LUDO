@@ -1,8 +1,9 @@
 services:
   - type: web
-    name: ludo-backend
+    name: PROJECT-LUDO
     env: python
     plan: free
+    region: singapore
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
     envVars:
@@ -12,7 +13,13 @@ services:
         value: production
       - key: GEMINI_API_KEY
         sync: false
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: CORS_METHODS
+        value: "GET,POST,PUT,DELETE,OPTIONS"
+      - key: CORS_HEADERS
+        value: "Content-Type,Authorization"
       - key: BACKEND_URL
-        value: https://ludo-backend.onrender.com
+        value: https://project-ludo.onrender.com
       - key: FRONTEND_URL
-        value: https://ludo-frontend.onrender.com
+        value: https://your-frontend-url.vercel.app
