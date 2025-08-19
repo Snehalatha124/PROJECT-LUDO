@@ -28,6 +28,19 @@
   .input-field {
     @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent;
   }
+
+  /* Custom dropdown styling for Test Type */
+  .test-type-dropdown {
+    @apply w-full px-3 py-2 bg-gradient-to-r from-purple-600 to-purple-700 border border-purple-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent;
+  }
+
+  .test-type-dropdown option {
+    @apply bg-white text-gray-900 py-2 px-3;
+  }
+
+  .test-type-dropdown option:checked {
+    @apply bg-primary-600 text-white;
+  }
   
   .metric-card {
     @apply bg-white rounded-lg shadow-sm border border-gray-200 p-4;

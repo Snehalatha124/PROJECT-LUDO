@@ -122,7 +122,7 @@ const TestResults = ({ results }) => {
             </div>
             
             <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Peak RPS</span>
+                                      <span className="text-sm text-gray-600">Transaction Per Second</span>
               <span className="font-medium">{results.peakRPS?.toFixed(0)}</span>
             </div>
             

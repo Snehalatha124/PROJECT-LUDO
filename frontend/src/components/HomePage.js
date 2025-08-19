@@ -64,7 +64,7 @@ const HomePage = ({ onNavigate }) => {
               <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center">
                 <Brain className="w-5 h-5 text-purple-600" />
               </div>
-              <h1 className="text-2xl font-bold text-white">Ludeosaurous AI Agent</h1>
+                              <h1 className="text-2xl font-bold text-white">Loadosaurus AI Agent</h1>
             </div>
             
             {/* Navigation */}
@@ -151,7 +151,7 @@ const HomePage = ({ onNavigate }) => {
              </motion.div>
             
             <h1 className="text-6xl font-bold text-white mb-6">
-              Welcome to Ludeosaurous
+              Welcome to Loadosaurus
             </h1>
             <p className="text-xl text-white/90 max-w-3xl mx-auto mb-12 leading-relaxed">
               Your intelligent AI companion for comprehensive performance testing. Simulate real-world scenarios with Load, Stress, Spike, and Soak testing to ensure your applications perform flawlessly under any conditions.
@@ -221,7 +221,7 @@ const HomePage = ({ onNavigate }) => {
             transition={{ duration: 0.8, delay: 0.4 }}
             className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20"
           >
-            <h2 className="text-3xl font-bold text-white text-center mb-12">Why Choose Ludeosaurous?</h2>
+            <h2 className="text-3xl font-bold text-white text-center mb-12">Why Choose Loadosaurus?</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               {features.map((feature, index) => (
@@ -259,7 +259,7 @@ const HomePage = ({ onNavigate }) => {
           >
             <h2 className="text-3xl font-bold text-white mb-6">Ready to Get Started?</h2>
             <p className="text-white/90 text-lg mb-8 max-w-2xl mx-auto">
-              Join thousands of developers who trust Ludeosaurous for their performance testing needs. Get started in minutes with our intuitive interface and powerful AI capabilities.
+              Join thousands of developers who trust Loadosaurus for their performance testing needs. Get started in minutes with our intuitive interface and powerful AI capabilities.
             </p>
             
             <motion.button

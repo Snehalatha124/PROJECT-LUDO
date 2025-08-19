@@ -211,7 +211,7 @@ const TestHistory = () => {
                       <span className="ml-1 font-medium">{test.results.avgResponseTime}ms</span>
                     </div>
                     <div>
-                      <span className="text-gray-500">Peak RPS:</span>
+                                              <span className="text-gray-500">Transaction Per Second:</span>
                       <span className="ml-1 font-medium">{test.results.peakRPS}</span>
                     </div>
                     <div>

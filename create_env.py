@@ -16,13 +16,8 @@ def create_backend_env():
         return
     
     env_content = """# Gemini AI Configuration
-GEMINI_API_KEY=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
-
-# OpenRouter AI Configuration (Alternative AI Provider)
-OPENROUTER_API_KEY=your-openrouter-api-key-here
-OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-OPENROUTER_SITE_URL=https://your-site-url.com
-OPENROUTER_SITE_NAME=Ludo Performance Suite
+# Get your API key from: https://makersuite.google.com/app/apikey
+GEMINI_API_KEY=your-gemini-api-key-here
 
 # Flask Configuration
 FLASK_ENV=development
@@ -35,7 +30,7 @@ MAX_CONCURRENT_TESTS=10
 DEFAULT_TEST_DURATION=60
 DEFAULT_NUM_USERS=100
 
-# Deployment Configuration (for Vercel)
+# Deployment Configuration
 BACKEND_URL=http://localhost:5000
 FRONTEND_URL=http://localhost:3000
 """
@@ -43,8 +38,9 @@ FRONTEND_URL=http://localhost:3000
     with open(env_file, 'w') as f:
         f.write(env_content)
     
-    print("✅ Backend .env file created with your Gemini API key")
-    print("💡 You can add your OpenRouter API key to enable image analysis")
+    print("✅ Backend .env file created")
+    print("⚠️  IMPORTANT: Replace 'your-gemini-api-key-here' with your real Gemini API key")
+    print("💡 Get your API key from: https://makersuite.google.com/app/apikey")
 
 def create_frontend_env():
     """Create frontend .env file"""
@@ -61,8 +57,8 @@ def create_frontend_env():
 # For local development:
 REACT_APP_BACKEND_URL=http://localhost:5000
 
-# For production deployment (set in Vercel dashboard):
-# REACT_APP_BACKEND_URL=https://your-backend.vercel.app
+# For production deployment (set in Netlify dashboard):
+# REACT_APP_BACKEND_URL=https://your-backend.onrender.com
 
 # Environment
 REACT_APP_ENV=development
@@ -87,13 +83,10 @@ def main():
     create_frontend_env()
     
     print("\n🎉 .env files created successfully!")
-    print("\n📋 API Keys Status:")
-    print("✅ Gemini API: Configured")
-    print("⚠️  OpenRouter API: Add your key to backend/.env for image analysis")
-    print("\n💡 To add OpenRouter API key:")
-    print("1. Get your key from https://openrouter.ai/")
-    print("2. Edit backend/.env")
-    print("3. Replace 'your-openrouter-api-key-here' with your actual key")
+    print("\n📋 Next Steps:")
+    print("1. Get your Gemini API key from: https://makersuite.google.com/app/apikey")
+    print("2. Replace 'your-gemini-api-key-here' in backend/.env with your real key")
+    print("3. Set GEMINI_API_KEY in your Render dashboard for production")
 
 if __name__ == "__main__":
     main() 

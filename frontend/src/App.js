@@ -195,22 +195,27 @@ function App() {
             <div className="card h-full">
               <div className="flex items-center space-x-3 mb-4">
                 <Settings className="h-6 w-6 text-blue-400" />
-                <h3 className="text-lg font-semibold text-white">Test Configuration</h3>
+                <h3 className="text-lg font-semibold text-black">Test Configuration</h3>
               </div>
               
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Test Type:</label>
-                  <select 
-                    value={testConfig.type}
-                    onChange={(e) => setTestConfig(prev => ({ ...prev, type: e.target.value }))}
-                    className="input-field w-full"
-                  >
-                    <option value="Load Test">Load Test</option>
-                    <option value="Stress Test">Stress Test</option>
-                    <option value="Spike Test">Spike Test</option>
-                    <option value="Soak Test">Soak Test</option>
-                  </select>
+                  <label className="block text-sm font-medium text-black-400 mb-2">Test Type:</label>
+                  <div className="space-y-2">
+                    {['Load Test', 'Stress Test', 'Spike Test', 'Soak Test'].map((testType) => (
+                      <label key={testType} className="flex items-center space-x-3 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="testType"
+                          value={testType}
+                          checked={testConfig.type === testType}
+                          onChange={(e) => setTestConfig(prev => ({ ...prev, type: e.target.value }))}
+                          className="text-primary-600 focus:ring-primary-500"
+                        />
+                        <span className="text-gray-700 font-medium">{testType}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
 
                 <div>

@@ -40,7 +40,7 @@ const RecentTestHistory = () => {
                    Good performance with minor issues with {test.success_rate}% success rate
                  </p>
                  <div className="text-gray-400 text-sm">
-                   Avg Response: {test.avg_response_time}ms | Peak RPS: {test.peak_rps}
+                   Avg Response: {test.avg_response_time}ms | Transaction Per Second: {test.peak_rps}
                  </div>
                  <div className="text-gray-500 text-xs mt-1">
                    {test.timestamp}

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { useTestContext } from '../context/TestContext';
+import { usePerformanceAPI } from '../hooks/usePerformanceAPI';
 
 const PerformancePage = ({ onNavigate }) => {
   const {
@@ -302,12 +303,23 @@ const PerformancePage = ({ onNavigate }) => {
     userCount: 100,
     duration: 60,
     rampUp: 10,
-    thinkTime: 1000
+    thinkTime: 1000,
+    // HTTP Test extras
+    httpMethod: 'GET',
+    httpHeadersText: '',
+    httpBodyType: 'raw', // json | form | raw
+    httpBodyText: '',
+    targetTPS: 0
   });
   
   const [showMonitoring, setShowMonitoring] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [testProgress, setTestProgress] = useState(0);
+  const [resultsTab, setResultsTab] = useState('summary');
+  const backendTestIdRef = useRef(null);
+  const pollTimerRef = useRef(null);
+
+  const { startTest: apiStartTest, getTestStatus } = usePerformanceAPI();
   
   const [aiAnalysis, setAiAnalysis] = useState(() => {
     // Generate initial AI analysis for default test results
@@ -336,7 +348,7 @@ const PerformancePage = ({ onNavigate }) => {
   };
 
   const handleTestTypeChange = (type) => {
-    const preset = testTypePresets[type];
+    const preset = testTypePresets[type] || testTypePresets.load;
     setTestConfig(prev => ({
       ...prev,
       type,
@@ -354,6 +366,7 @@ const PerformancePage = ({ onNavigate }) => {
     contextStartTest(testConfig);
     setShowMonitoring(true);
     setShowResults(false);
+    setResultsTab('summary');
     setTestProgress(0);
     elapsedTimeRef.current = 0;
 
@@ -365,7 +378,53 @@ const PerformancePage = ({ onNavigate }) => {
       successRate: []
     });
 
-    // Start monitoring
+    // Kick off backend test and monitoring
+    try {
+      const backendPayload = {
+        type: (testConfig.type || 'load').toLowerCase() === 'load' ? 'Load Test'
+          : (testConfig.type || '').toLowerCase() === 'stress' ? 'Stress Test'
+          : (testConfig.type || '').toLowerCase() === 'spike' ? 'Spike Test'
+          : 'Soak Test',
+        url: testConfig.targetUrl,
+        users: testConfig.userCount,
+        duration: testConfig.duration,
+        rampUp: testConfig.rampUp,
+        thinkTime: testConfig.thinkTime,
+        method: testConfig.httpMethod || 'GET'
+      };
+      const startResp = await apiStartTest(backendPayload);
+      if (startResp && startResp.success && startResp.testId) {
+        backendTestIdRef.current = startResp.testId;
+        // Poll status periodically; when completed, load real results to chart
+        pollTimerRef.current = setInterval(async () => {
+          try {
+            if (!backendTestIdRef.current) return;
+            const statusResp = await getTestStatus(backendTestIdRef.current);
+            const st = statusResp && statusResp.status;
+            if (st && st.status === 'completed' && st.results) {
+              // Build chart data from backend timeseries
+              const ts = st.results.timeseries || [];
+              updateTestData({
+                labels: ts.map(p => (p.second + 's')),
+                responseTimes: ts.map(p => p.avgResponseTime || 0),
+                requestsPerSecond: ts.map(p => p.requestsPerSecond || 0),
+                successRate: []
+              });
+              updateTestResults(st.results);
+              setShowResults(true);
+              // Stop local simulation monitoring
+              stopTest();
+              clearInterval(pollTimerRef.current);
+              pollTimerRef.current = null;
+            }
+          } catch {}
+        }, 3000);
+      }
+    } catch (e) {
+      // If backend call fails, continue with local simulation
+    }
+
+    // Start local progress/monitoring (will be overridden by backend results when ready)
     startMonitoring();
   };
 
@@ -425,6 +484,10 @@ const PerformancePage = ({ onNavigate }) => {
        clearInterval(testIntervalRef.current);
        testIntervalRef.current = null;
      }
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
 
      contextStopTest();
      setShowResults(true);
@@ -465,7 +528,7 @@ const PerformancePage = ({ onNavigate }) => {
      const percentileIndex = Math.floor(responseTimesCount * 0.95);
      const percentile95 = sortedTimes[percentileIndex] || avgResponse;
      
-     // Calculate peak RPS from collected data
+                     // Calculate peak Transaction Per Second from collected data
      const peakRPS = testData.requestsPerSecond.length > 0 
        ? Math.max(...testData.requestsPerSecond) 
        : Math.round(testConfig.userCount / 10); // Fallback based on user count
@@ -495,6 +558,10 @@ const PerformancePage = ({ onNavigate }) => {
        clearInterval(testIntervalRef.current);
        testIntervalRef.current = null;
      }
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
 
      contextStopTest();
      setShowMonitoring(false);
@@ -644,7 +711,7 @@ const PerformancePage = ({ onNavigate }) => {
                 placeholder="Enter target URL"
               />
             </div>
-            
+
             <div className="space-y-2">
               <label className="block text-sm font-medium text-white">Number of Users:</label>
               <input
@@ -682,16 +749,30 @@ const PerformancePage = ({ onNavigate }) => {
             </div>
             
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-white">Think Time (ms):</label>
-              <input
-                type="number"
-                value={testConfig.thinkTime}
-                onChange={(e) => setTestConfig(prev => ({ ...prev, thinkTime: parseInt(e.target.value) || 0 }))}
+              <label className="block text-sm font-medium text-white">HTTP Request:</label>
+              <select
+                value={testConfig.httpMethod || 'GET'}
+                onChange={(e) => setTestConfig(prev => ({ ...prev, httpMethod: e.target.value }))}
                 className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-blue-400"
-                min="0"
-                max="10000"
-              />
+              >
+                <option value="GET">GET</option>
+                <option value="POST">POST</option>
+                <option value="HEAD">HEAD</option>
+                <option value="PUT">PUT</option>
+                <option value="OPTIONS">OPTIONS</option>
+                <option value="TRACE">TRACE</option>
+                <option value="DELETE">DELETE</option>
+                <option value="PATCH">PATCH</option>
+                <option value="PROPFIND">PROPFIND</option>
+                <option value="PROPPATCH">PROPPATCH</option>
+                <option value="MKCOL">MKCOL</option>
+                <option value="COPY">COPY</option>
+                <option value="MOVE">MOVE</option>
+                <option value="LOCK">LOCK</option>
+                <option value="UNLOCK">UNLOCK</option>
+              </select>
             </div>
+
           </div>
           
           <div className="flex justify-center space-x-4">
@@ -868,7 +949,7 @@ const PerformancePage = ({ onNavigate }) => {
                     <span className="text-white font-semibold">{testResults.percentile95}ms</span>
                   </div>
                   <div className="bg-white/5 rounded-lg p-4 flex justify-between">
-                    <span className="text-gray-300">Peak RPS:</span>
+                                            <span className="text-gray-300">Transaction Per Second:</span>
                     <span className="text-white font-semibold">{testResults.peakRPS}</span>
                   </div>
                 </div>
@@ -1064,7 +1145,7 @@ const PerformancePage = ({ onNavigate }) => {
                       <h4 className="text-white font-semibold">{test.type} - {test.userCount} Users</h4>
                       <p className="text-gray-300 text-sm">{test.status} with {test.successRate}% success rate</p>
                       <p className="text-gray-400 text-sm">
-                        Avg Response: {test.avgResponse}ms | Peak RPS: {test.peakRPS}
+                        Avg Response: {test.avgResponse}ms | Transaction Per Second: {test.peakRPS}
                       </p>
                       <span className="text-gray-500 text-xs">{test.timestamp}</span>
                     </div>

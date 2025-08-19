@@ -216,7 +216,7 @@ const DynamicDashboard = () => {
                 <span className="text-white font-semibold">{currentData.percentile95}ms</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-300">Peak RPS:</span>
+                                        <span className="text-gray-300">Transaction Per Second:</span>
                 <span className="text-white font-semibold">{currentData.peakRPS}</span>
               </div>
             </div>

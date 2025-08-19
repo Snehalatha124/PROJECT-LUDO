@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template_string
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 import google.generativeai as genai
@@ -9,6 +9,7 @@ from datetime import datetime
 import requests
 from dotenv import load_dotenv
 from jmeter_runner import JMeterRunner
+from load_runner import HTTPLoadRunner
 import threading
 import time
 
@@ -381,7 +382,7 @@ def monitor_test_real_time(test_id, test_config):
 @app.route('/')
 def home():
     return jsonify({
-        "message": "Ludeosaurous AI Backend",
+        "message": "Loadosaurus AI Backend",
         "version": "1.0.0",
         "gemini_connected": GEMINI_API_KEY != 'your-gemini-api-key-here',
         "openrouter_connected": False, # Removed OpenRouter connection status
@@ -397,7 +398,21 @@ def home():
             "POST /test/start": "Start a new JMeter test",
             "GET /test/:id/status": "Get test status",
             "GET /tests": "List all tests",
-            "POST /test/:id/stop": "Stop a running test"
+            "POST /test/:id/stop": "Stop a running test",
+            "GET /test-api": "Test all HTTP methods",
+            "GET /test-api/delay/:seconds": "Test with configurable delay",
+            "GET /store/inventory": "Get pet inventory status",
+            "POST /store/order": "Place new pet order",
+            "GET /store/order/:orderId": "Get order by ID",
+            "DELETE /store/order/:orderId": "Delete order by ID",
+            "POST /user": "Create new user",
+            "GET /user/:username": "Get user by username",
+            "PUT /user/:username": "Update user",
+            "DELETE /user/:username": "Delete user",
+            "POST /pet": "Add new pet",
+            "GET /pet/:petId": "Get pet by ID",
+            "PUT /pet/:petId": "Update pet",
+            "DELETE /pet/:petId": "Delete pet"
         }
     })
 
@@ -424,7 +439,30 @@ def health():
         "ai_provider": analyzer.ai_provider,
         "jmeter_available": jmeter_available,
         "jmeter_path": jmeter_path,
-        "environment": "production" if IS_PRODUCTION else "development"
+        "environment": "production" if IS_PRODUCTION else "development",
+        "endpoints": {
+            "POST /analyze": "Analyze performance test results with AI",
+            "POST /analyze/image": "Analyze performance test results with image",
+            "GET /health": "Health check",
+            "POST /test/start": "Start a new JMeter test",
+            "GET /test/:id/status": "Get test status",
+            "GET /tests": "List all tests",
+            "POST /test/:id/stop": "Stop a running test",
+            "GET /test-api": "Test all HTTP methods",
+            "GET /test-api/delay/:seconds": "Test with configurable delay",
+            "GET /store/inventory": "Get pet inventory status",
+            "POST /store/order": "Place new pet order",
+            "GET /store/order/:orderId": "Get order by ID",
+            "DELETE /store/order/:orderId": "Delete order by ID",
+            "POST /user": "Create new user",
+            "GET /user/:username": "Get user by username",
+            "PUT /user/:username": "Update user",
+            "DELETE /user/:username": "Delete user",
+            "POST /pet": "Add new pet",
+            "GET /pet/:petId": "Get pet by ID",
+            "PUT /pet/:petId": "Update pet",
+            "DELETE /pet/:petId": "Delete pet"
+        }
     })
 
 @app.route('/analyze', methods=['POST'])
@@ -516,7 +554,10 @@ def start_test():
                 "error": "No test configuration provided"
             }), 400
         
-        # Validate required fields
+        # If type is 'HTTP Test' use async HTTP runner; else keep JMeter flow
+        test_type = data.get('type', 'Load Test')
+
+        # Validate required fields (keep legacy names as-is for UI compatibility) for JMeter modes
         required_fields = ['type', 'url', 'users', 'duration']
         for field in required_fields:
             if field not in data:
@@ -536,8 +577,78 @@ def start_test():
             "ramp_up": data.get("rampUp", 10),
             "think_time": data.get("thinkTime", 1000)
         }
+
+        # Advanced optional fields (no UI/layout change required)
+        # HTTP sampler(s)
+        if 'httpSampler' in data:
+            test_config['httpSampler'] = data['httpSampler']
+        if 'httpSamplers' in data:
+            test_config['httpSamplers'] = data['httpSamplers']
+        # Auth
+        if 'auth' in data:
+            test_config['auth'] = data['auth']
+        # Assertions
+        if 'assertions' in data:
+            test_config['assertions'] = data['assertions']
+        # TPS control
+        if 'tps' in data:
+            test_config['tps'] = data['tps']
+        # Scheduling
+        if 'schedule' in data:
+            test_config['schedule'] = data['schedule']
         
-        # Start JMeter test
+        # HTTP precise TPS runner
+        if test_type == 'HTTP Test':
+            http_cfg = {
+                'url': data.get('url'),
+                'method': data.get('method', 'GET'),
+                'headers': data.get('headers'),
+                'params': data.get('params'),
+                'body': data.get('body'),
+                'bodyType': data.get('bodyType'),
+                'auth': data.get('auth'),
+                'users': data.get('users', 50),
+                'target_tps': data.get('target_tps') or data.get('tps'),
+                'duration_seconds': data.get('duration'),
+                'ramp_up_seconds': data.get('rampUp'),
+                'loop_count': data.get('loopCount')
+            }
+
+            def _emit_tick(tick):
+                socketio.emit('test_update', {
+                    'test_id': test_id,
+                    'progress': min((tick.get('elapsed', 0) / max(1, test_config['duration'])) * 100, 100),
+                    'avg_response_time': tick.get('avgResponseTime', 0),
+                    'requests_per_second': tick.get('rps', 0),
+                    'timestamp': datetime.now().isoformat()
+                })
+
+            runner = HTTPLoadRunner(http_cfg, on_tick=_emit_tick)
+
+            def _run_http():
+                results = runner.run()
+                jmeter_runner.active_tests[test_id] = {
+                    'config': test_config,
+                    'start_time': datetime.now(),
+                    'status': 'completed',
+                    'results': results
+                }
+                socketio.emit('test_completed', {
+                    'test_id': test_id,
+                    'status': 'completed',
+                    'results': results,
+                    'timestamp': datetime.now().isoformat()
+                })
+
+            threading.Thread(target=_run_http, daemon=True).start()
+            return jsonify({
+                'success': True,
+                'testId': test_id,
+                'message': 'HTTP Test started successfully',
+                'config': test_config
+            })
+
+        # Start JMeter test for existing types
         result = jmeter_runner.run_jmeter_test(test_config)
         
         if result['success']:
@@ -561,6 +672,48 @@ def start_test():
             "success": False,
             "error": f"Failed to start test: {str(e)}"
         }), 500
+
+@app.route('/test/plan/save', methods=['POST'])
+def save_test_plan():
+    try:
+        payload = request.get_json() or {}
+        name = payload.get('name') or f"plan_{int(datetime.now().timestamp())}"
+        plan = payload.get('plan') or {}
+        result = jmeter_runner.save_test_plan(name, plan)
+        return jsonify(result), (200 if result.get('success') else 400)
+    except Exception as e:
+        return jsonify({ 'success': False, 'error': str(e) }), 500
+
+@app.route('/test/plan/load', methods=['GET'])
+def load_test_plan():
+    try:
+        name = request.args.get('name')
+        if not name:
+            return jsonify({ 'success': False, 'error': 'name is required' }), 400
+        result = jmeter_runner.load_test_plan(name)
+        return jsonify(result), (200 if result.get('success') else 404)
+    except Exception as e:
+        return jsonify({ 'success': False, 'error': str(e) }), 500
+
+@app.route('/test/plan/export-http', methods=['POST'])
+def export_http_config():
+    try:
+        payload = request.get_json() or {}
+        result = jmeter_runner.export_http_config(payload)
+        return jsonify(result), (200 if result.get('success') else 400)
+    except Exception as e:
+        return jsonify({ 'success': False, 'error': str(e) }), 500
+
+@app.route('/test/plan/import-http', methods=['POST'])
+def import_http_config():
+    try:
+        payload = request.get_json() or {}
+        plan = payload.get('plan') or {}
+        http_cfg = payload.get('http') or payload
+        result = jmeter_runner.import_http_config(plan, http_cfg)
+        return jsonify(result), (200 if result.get('success') else 400)
+    except Exception as e:
+        return jsonify({ 'success': False, 'error': str(e) }), 500
 
 @app.route('/test/<test_id>/status', methods=['GET'])
 def get_test_status(test_id):
@@ -680,8 +833,707 @@ def get_agent_status():
         "timestamp": datetime.now().isoformat()
     })
 
+@app.route('/test-api', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'])
+def test_api():
+    """Test endpoint for HTTP method testing"""
+    method = request.method
+    headers = dict(request.headers)
+    body = request.get_data(as_text=True) if request.data else None
+    
+    # Parse JSON body if present
+    json_body = None
+    if body and request.content_type == 'application/json':
+        try:
+            json_body = request.get_json()
+        except:
+            json_body = None
+    
+    response_data = {
+        "method": method,
+        "url": request.url,
+        "headers": headers,
+        "query_params": dict(request.args),
+        "body": body,
+        "json_body": json_body,
+        "timestamp": datetime.now().isoformat(),
+        "message": f"Successfully received {method} request"
+    }
+    
+    # Return different status codes for testing
+    if method == 'POST':
+        return jsonify(response_data), 201
+    elif method == 'DELETE':
+        return jsonify(response_data), 204
+    else:
+        return jsonify(response_data), 200
+
+@app.route('/test-api/delay/<int:seconds>', methods=['GET'])
+def test_api_delay(seconds):
+    """Test endpoint with configurable delay for response time testing"""
+    import time
+    time.sleep(seconds)
+    
+    response_data = {
+        "method": "GET",
+        "url": request.url,
+        "delay_seconds": seconds,
+        "timestamp": datetime.now().isoformat(),
+        "message": f"Response delayed by {seconds} {'second' if seconds == 1 else 'seconds'}"
+    }
+    
+    return jsonify(response_data), 200
+
+# Petstore-style API endpoints for comprehensive testing
+@app.route('/store/inventory', methods=['GET'])
+def get_store_inventory():
+    """Returns test inventories by status"""
+    inventory = {
+        "available": 150,
+        "pending": 25,
+        "sold": 75,
+        "total": 250,
+        "timestamp": datetime.now().isoformat(),
+        "status": "success"
+    }
+    return jsonify(inventory), 200
+
+@app.route('/store/order', methods=['POST'])
+def place_store_order():
+    """Place a test order"""
+    try:
+        order_data = request.get_json()
+        if not order_data:
+            return jsonify({"error": "Order data required"}), 400
+        
+        # Generate a mock order ID
+        order_id = f"ORDER_{int(time.time())}"
+        
+        order_response = {
+            "id": order_id,
+            "petId": order_data.get("petId", 1),
+            "quantity": order_data.get("quantity", 1),
+            "shipDate": datetime.now().isoformat(),
+            "status": "placed",
+            "complete": False,
+            "message": "Order placed successfully"
+        }
+        
+        return jsonify(order_response), 201
+        
+    except Exception as e:
+        return jsonify({"error": f"Failed to place order: {str(e)}"}), 400
+
+@app.route('/store/order/<order_id>', methods=['GET'])
+def get_store_order(order_id):
+    """Find test order by ID"""
+    # Mock order data
+    order = {
+        "id": order_id,
+        "petId": 1,
+        "quantity": 1,
+        "shipDate": datetime.now().isoformat(),
+        "status": "placed",
+        "complete": False,
+        "message": f"Order {order_id} found"
+    }
+    
+    if not order_id.startswith("ORDER_"):
+        return jsonify({"error": "Order not found"}), 404
+    
+    return jsonify(order), 200
+
+@app.route('/store/order/<order_id>', methods=['DELETE'])
+def delete_store_order(order_id):
+    """Delete test order by ID"""
+    if not order_id.startswith("ORDER_"):
+        return jsonify({"error": "Order not found"}), 404
+    
+    return jsonify({"message": f"Order {order_id} deleted successfully"}), 200
+
+# User management endpoints
+@app.route('/user', methods=['POST'])
+def create_user():
+    """Create a test user"""
+    try:
+        user_data = request.get_json()
+        if not user_data:
+            return jsonify({"error": "User data required"}), 400
+        
+        user_id = f"USER_{int(time.time())}"
+        user_response = {
+            "id": user_id,
+            "username": user_data.get("username", "testuser"),
+            "email": user_data.get("email", "test@example.com"),
+            "firstName": user_data.get("firstName", "Test"),
+            "lastName": user_data.get("lastName", "User"),
+            "status": "active",
+            "message": "User created successfully"
+        }
+        
+        return jsonify(user_response), 201
+        
+    except Exception as e:
+        return jsonify({"error": f"Failed to create user: {str(e)}"}), 400
+
+@app.route('/user/<username>', methods=['GET'])
+def get_user(username):
+    """Get test user by username"""
+    user = {
+        "id": f"USER_{hash(username) % 10000}",
+        "username": username,
+        "email": f"{username}@example.com",
+        "firstName": "Test",
+        "lastName": "User",
+        "status": "active",
+        "message": f"User {username} found"
+    }
+    
+    return jsonify(user), 200
+
+@app.route('/user/<username>', methods=['PUT'])
+def update_user(username):
+    """Update test user"""
+    try:
+        user_data = request.get_json()
+        if not user_data:
+            return jsonify({"error": "User data required"}), 400
+        
+        user_response = {
+            "id": f"USER_{hash(username) % 10000}",
+            "username": username,
+            "email": user_data.get("email", f"{username}@example.com"),
+            "firstName": user_data.get("firstName", "Updated"),
+            "lastName": user_data.get("lastName", "User"),
+            "status": "active",
+            "message": f"User {username} updated successfully"
+        }
+        
+        return jsonify(user_response), 200
+        
+    except Exception as e:
+        return jsonify({"error": f"Failed to update user: {str(e)}"}), 400
+
+@app.route('/user/<username>', methods=['DELETE'])
+def delete_user(username):
+    """Delete test user"""
+    return jsonify({"message": f"User {username} deleted successfully"}), 200
+
+# Pet management endpoints
+@app.route('/pet', methods=['POST'])
+def add_pet():
+    """Add a test pet"""
+    try:
+        pet_data = request.get_json()
+        if not pet_data:
+            return jsonify({"error": "Pet data required"}), 400
+        
+        pet_id = f"PET_{int(time.time())}"
+        pet_response = {
+            "id": pet_id,
+            "name": pet_data.get("name", "Fluffy"),
+            "category": pet_data.get("category", {"id": 1, "name": "Dogs"}),
+            "tags": pet_data.get("tags", [{"id": 1, "name": "friendly"}]),
+            "status": "available",
+            "message": "Pet added successfully"
+        }
+        
+        return jsonify(pet_response), 201
+        
+    except Exception as e:
+        return jsonify({"error": f"Failed to add pet: {str(e)}"}), 400
+
+@app.route('/pet/<pet_id>', methods=['GET'])
+def get_pet(pet_id):
+    """Find pet by ID"""
+    if not pet_id.startswith("PET_"):
+        return jsonify({"error": "Pet not found"}), 404
+    
+    pet = {
+        "id": pet_id,
+        "name": "Fluffy",
+        "category": {"id": 1, "name": "Dogs"},
+        "tags": [{"id": 1, "name": "friendly"}],
+        "status": "available",
+        "message": f"Pet {pet_id} found"
+    }
+    
+    return jsonify(pet), 200
+
+@app.route('/pet/<pet_id>', methods=['PUT'])
+def update_pet(pet_id):
+    """Update pet"""
+    try:
+        pet_data = request.get_json()
+        if not pet_data:
+            return jsonify({"error": "Pet data required"}), 400
+        
+        if not pet_id.startswith("PET_"):
+            return jsonify({"error": "Pet not found"}), 404
+        
+        pet_response = {
+            "id": pet_id,
+            "name": pet_data.get("name", "Updated Fluffy"),
+            "category": pet_data.get("category", {"id": 1, "name": "Dogs"}),
+            "tags": pet_data.get("tags", [{"id": 1, "name": "updated"}]),
+            "status": pet_data.get("status", "available"),
+            "message": f"Pet {pet_id} updated successfully"
+        }
+        
+        return jsonify(pet_response), 200
+        
+    except Exception as e:
+        return jsonify({"error": f"Failed to update pet: {str(e)}"}), 400
+
+@app.route('/pet/<pet_id>', methods=['DELETE'])
+def delete_pet(pet_id):
+    """Delete pet"""
+    if not pet_id.startswith("PET_"):
+        return jsonify({"error": "Pet not found"}), 404
+    
+    return jsonify({"message": f"Pet {pet_id} deleted successfully"}), 200
+
+@app.route('/docs')
+def api_docs():
+    """API Documentation with Swagger UI"""
+    swagger_html = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="description" content="Loadosaurus Performance Testing Suite API Documentation" />
+        <title>Loadosaurus API Docs</title>
+        <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui.css" />
+        <style>
+            html { box-sizing: border-box; overflow: -moz-scrollbars-vertical; overflow-y: scroll; }
+            *, *:before, *:after { box-sizing: inherit; }
+            body { margin:0; background: #fafafa; }
+            .swagger-ui .topbar { display: none; }
+            .swagger-ui .info { margin: 20px 0; }
+            .swagger-ui .info .title { color: #3b4151; font-size: 36px; font-weight: 600; }
+            .swagger-ui .info .description { color: #3b4151; font-size: 14px; }
+        </style>
+    </head>
+    <body>
+        <div id="swagger-ui"></div>
+        <script src="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-bundle.js"></script>
+        <script src="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-standalone-preset.js"></script>
+        <script>
+            window.onload = function() {
+                const ui = SwaggerUIBundle({
+                    url: '/swagger.json',
+                    dom_id: '#swagger-ui',
+                    deepLinking: true,
+                    presets: [
+                        SwaggerUIBundle.presets.apis,
+                        SwaggerUIStandalonePreset
+                    ],
+                    plugins: [
+                        SwaggerUIBundle.plugins.DownloadUrl
+                    ],
+                    layout: "StandaloneLayout"
+                });
+            };
+        </script>
+    </body>
+    </html>
+    """
+    return swagger_html
+
+@app.route('/swagger.json')
+def swagger_json():
+    """Swagger JSON specification"""
+    swagger_spec = {
+        "openapi": "3.0.0",
+        "info": {
+            "title": "Loadosaurus Performance Testing Suite API",
+            "description": "Advanced performance testing tool with JMeter integration and AI analysis",
+            "version": "1.0.0",
+            "contact": {
+                "name": "LUDO Team",
+                "url": "https://github.com/your-repo"
+            }
+        },
+        "servers": [
+            {
+                "url": "http://127.0.0.1:5000",
+                "description": "Development server"
+            }
+        ],
+        "paths": {
+            "/health": {
+                "get": {
+                    "summary": "Health check",
+                    "description": "Get backend health status and available endpoints",
+                    "responses": {
+                        "200": {
+                            "description": "Backend is healthy",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "status": {"type": "string"},
+                                            "endpoints": {"type": "object"}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/store/inventory": {
+                "get": {
+                    "tags": ["store"],
+                    "summary": "Returns pet inventories by status",
+                    "description": "Get current pet inventory status",
+                    "responses": {
+                        "200": {
+                            "description": "Successful operation",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "available": {"type": "integer"},
+                                            "pending": {"type": "integer"},
+                                            "sold": {"type": "integer"},
+                                            "total": {"type": "integer"}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/store/order": {
+                "post": {
+                    "tags": ["store"],
+                    "summary": "Place an order for a pet",
+                    "description": "Create a new pet order",
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "petId": {"type": "integer"},
+                                        "quantity": {"type": "integer"},
+                                        "status": {"type": "string"}
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "201": {
+                            "description": "Order created successfully",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "id": {"type": "string"},
+                                            "petId": {"type": "integer"},
+                                            "quantity": {"type": "integer"},
+                                            "status": {"type": "string"}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/store/order/{orderId}": {
+                "get": {
+                    "tags": ["store"],
+                    "summary": "Find purchase order by ID",
+                    "description": "Retrieve order details by order ID",
+                    "parameters": [
+                        {
+                            "name": "orderId",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "string"}
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Order found",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "id": {"type": "string"},
+                                            "petId": {"type": "integer"},
+                                            "status": {"type": "string"}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "delete": {
+                    "tags": ["store"],
+                    "summary": "Delete purchase order by ID",
+                    "description": "Remove order by order ID",
+                    "parameters": [
+                        {
+                            "name": "orderId",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "string"}
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Order deleted successfully"
+                        }
+                    }
+                }
+            },
+            "/user": {
+                "post": {
+                    "tags": ["user"],
+                    "summary": "Create new user",
+                    "description": "Create a new user account",
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "username": {"type": "string"},
+                                        "email": {"type": "string"},
+                                        "firstName": {"type": "string"},
+                                        "lastName": {"type": "string"}
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "201": {
+                            "description": "User created successfully"
+                        }
+                    }
+                }
+            },
+            "/user/{username}": {
+                "get": {
+                    "tags": ["user"],
+                    "summary": "Get user by username",
+                    "description": "Retrieve user information",
+                    "parameters": [
+                        {
+                            "name": "username",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "string"}
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "User found"
+                        }
+                    }
+                },
+                "put": {
+                    "tags": ["user"],
+                    "summary": "Update user",
+                    "description": "Update user information",
+                    "parameters": [
+                        {
+                            "name": "username",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "string"}
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "User updated successfully"
+                        }
+                    }
+                },
+                "delete": {
+                    "tags": ["user"],
+                    "summary": "Delete user",
+                    "description": "Remove user account",
+                    "parameters": [
+                        {
+                            "name": "username",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "string"}
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "User deleted successfully"
+                        }
+                    }
+                }
+            },
+            "/pet": {
+                "post": {
+                    "tags": ["pet"],
+                    "summary": "Add a new pet",
+                    "description": "Create a new pet record",
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "name": {"type": "string"},
+                                            "category": {"type": "object"},
+                                            "tags": {"type": "array"}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "201": {
+                            "description": "Pet created successfully"
+                        }
+                    }
+                }
+            },
+            "/pet/{petId}": {
+                "get": {
+                    "tags": ["pet"],
+                    "summary": "Find pet by ID",
+                    "description": "Retrieve pet information",
+                    "parameters": [
+                        {
+                            "name": "petId",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "string"}
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Pet found"
+                        }
+                    }
+                },
+                "put": {
+                    "tags": ["pet"],
+                    "summary": "Update pet",
+                    "description": "Update pet information",
+                    "parameters": [
+                        {
+                            "name": "petId",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "string"}
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Pet updated successfully"
+                        }
+                    }
+                },
+                "delete": {
+                    "tags": ["pet"],
+                    "summary": "Delete pet",
+                    "description": "Remove pet record",
+                    "parameters": [
+                        {
+                            "name": "petId",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "string"}
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Pet deleted successfully"
+                        }
+                    }
+                }
+            },
+            "/test-api": {
+                "get": {
+                    "tags": ["testing"],
+                    "summary": "Test all HTTP methods",
+                    "description": "General endpoint for testing various HTTP verbs",
+                    "responses": {
+                        "200": {
+                            "description": "Request processed successfully"
+                        }
+                    }
+                },
+                "post": {
+                    "tags": ["testing"],
+                    "summary": "Test POST method",
+                    "description": "Test POST request handling",
+                    "responses": {
+                        "200": {
+                            "description": "POST request processed"
+                        }
+                    }
+                }
+            },
+            "/test-api/delay/{seconds}": {
+                "get": {
+                    "tags": ["testing"],
+                    "summary": "Test with configurable delay",
+                    "description": "Test response time with specified delay",
+                    "parameters": [
+                        {
+                            "name": "seconds",
+                            "in": "path",
+                            "required": True,
+                            "schema": {"type": "integer"}
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Response with delay"
+                        }
+                    }
+                }
+            }
+        },
+        "tags": [
+            {
+                "name": "store",
+                "description": "Access to Petstore orders"
+            },
+            {
+                "name": "user",
+                "description": "Operations about user"
+            },
+            {
+                "name": "pet",
+                "description": "Everything about your pets"
+            },
+            {
+                "name": "testing",
+                "description": "Testing and performance endpoints"
+            }
+        ]
+    }
+    return jsonify(swagger_spec)
+
 if __name__ == '__main__':
-    print("🚀 Starting Ludeosaurous AI Performance Testing Suite...")
+    print("🚀 Starting Loadosaurus AI Performance Testing Suite...")
     print(f"📍 Backend URL: {BACKEND_URL}")
     print(f"📍 Frontend URL: {FRONTEND_URL}")
     print(f"🤖 AI Provider: {analyzer.ai_provider}")

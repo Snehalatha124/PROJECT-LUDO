@@ -73,13 +73,8 @@ def setup_backend():
     if not env_file.exists():
         print("🔐 Creating .env file...")
         env_content = """# Gemini AI Configuration
-GEMINI_API_KEY=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
-
-# OpenRouter AI Configuration (Alternative AI Provider)
-OPENROUTER_API_KEY=your-openrouter-api-key-here
-OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-OPENROUTER_SITE_URL=https://your-site-url.com
-OPENROUTER_SITE_NAME=Ludo Performance Suite
+# Get your API key from: https://makersuite.google.com/app/apikey
+GEMINI_API_KEY=your-gemini-api-key-here
 
 # Flask Configuration
 FLASK_ENV=development
@@ -92,7 +87,7 @@ MAX_CONCURRENT_TESTS=10
 DEFAULT_TEST_DURATION=60
 DEFAULT_NUM_USERS=100
 
-# Deployment Configuration (for Vercel)
+# Deployment Configuration
 BACKEND_URL=http://localhost:5000
 FRONTEND_URL=http://localhost:3000
 """
